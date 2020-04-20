@@ -9,12 +9,9 @@ defmodule AdjustTask.Application do
   def start(_type, _args) do
     Logger.info(fn -> "Application started." end)
     children = [
-      # Starts a worker by calling: AdjustTask.Worker.start_link(arg)
-      # {AdjustTask.Worker, arg}
+      AdjustTask.Worker
     ]
 
-    # See https://hexdocs.pm/elixir/Supervisor.html
-    # for other strategies and supported options
     opts = [strategy: :one_for_one, name: AdjustTask.Supervisor]
     Supervisor.start_link(children, opts)
   end
