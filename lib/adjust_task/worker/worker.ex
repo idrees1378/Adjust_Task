@@ -1,7 +1,26 @@
 defmodule AdjustTask.Worker do
+
+    @moduledoc """
+        The worker module is a Genserver. It will run daily at 12:01 AM to get all the date 
+        of the previous day. We are hitting day API because it will reduce our number of requests per day and
+        besides the day API is giving us the same granularity.
+        This module starts with a default state defined in state.ex
+        %State{date: _, url: _, retries: _, status: _}
+        When the app starts it search for a start date in configs, if there the start date is not 
+        defined in configs it starts by fetching yesterday's data.
+        If a start date is defined, the worker starts fetching data from start date to yesterday(
+        We can also it concurrent by spawing multiple process because this is a concurrent operation).
+        After the first launch, when the application fetches all the data till yesterday, it schedules
+        itself to run again at 12:01 next day, to fetch today's data.
+        Max retries can be configured from configuration but if its not configured, the default is 3.
+        If a request failes max_retries() times, the request is saved to db with status "failed" and 
+        the application moves to next date if there is any.
+    """
+
     use GenServer
     alias AdjustTask.Utils
     alias AdjustTask.Worker.State
+    alias AdjustTask.Postgres.PostgresUtils
     
     require Logger
 
@@ -57,20 +76,21 @@ defmodule AdjustTask.Worker do
        
         else
             :stop ->
-                state = %{state | date: Utils.next_date(date), status: "processing", retries: 0}
+                state = %{state | retries: retry_no, status: "failed"}
+                save_req_state(state) # update previous state
 
+                state = %{state | date: Utils.next_date(date), status: "processing", retries: 1}
                 save_req_state(state) # insert new request state in db
+                
                 process_req(state)
 
             false -> 
                 schedule()
                 state
 
-            _->
-                schedule()
-                state = %{state | retries: retry_no + 1, status: "failed"}
-                save_req_state(state) # insert new request state in db
-                state
+            _ ->
+                state = %{state | retries: retry_no + 1}
+                process_req(state)
         end
     end
 
@@ -111,10 +131,9 @@ defmodule AdjustTask.Worker do
             |> Utils.day_start
         
         Logger.info(fn -> "Scheduling next routine." end)
-        
+
         # schedule at 12:01 AM Next day
-        # TODO:- Uncomment the following
-        after_duration = 15_000#next_day_start - unix_now + 60_000 
+        after_duration = next_day_start - unix_now + 60_000 
         Process.send_after(self(), :next_scheduled, after_duration)
     end
 
@@ -129,14 +148,14 @@ defmodule AdjustTask.Worker do
         state = %{state | status: "success"}
         save_req_state(state) # update previous request state
         
-        state = %{state | date: Utils.next_date(date), status: "processing", retries: 0}
+        state = %{state | date: Utils.next_date(date), status: "processing", retries: 1}
         save_req_state(state) # insert new request state in db
 
         state
     end
 
-    defp save_req_state(%{date: _date, retries: _retries, status: _status}) do
-        #TODO:- Save Request date to db
+    defp save_req_state(%{date: date, retries: retries, status: status}) do
+        PostgresUtils.create_or_update_req_meta(%{req_date: date, tries: retries, status: status})
     end
     
 #        Checks from the database if there is any date entry, if yes, it means that the applicaiton
@@ -146,10 +165,12 @@ defmodule AdjustTask.Worker do
 #        it reads yesterday date and return default state.
  
     defp get_default_state() do
-        #TODO:- Get Dates from database
-        date =  get_start_date_from_config() || Utils.previous_date(Date.utc_today)  
+        last_req = PostgresUtils.get_last_req_meta() || %{}
+        retries = Map.get(last_req, :tries) || 1
+        date = 
+            Map.get(last_req, :req_date)  || get_start_date_from_config() || Utils.previous_date(Date.utc_today)  
         
-        %State{date: date, retries: 0}
+        %State{date: date, retries: retries}
     end
 
     defp get_start_date_from_config() do
@@ -162,7 +183,7 @@ defmodule AdjustTask.Worker do
     end
 
     defp req_should_try(tries) do
-        if tries < max_retries(), do: :try, else: :stop
+        if tries <= max_retries(), do: :try, else: :stop
     end
 
     defp max_retries() do

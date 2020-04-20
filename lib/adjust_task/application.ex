@@ -9,6 +9,7 @@ defmodule AdjustTask.Application do
   def start(_type, _args) do
     Logger.info(fn -> "Application started." end)
     children = [
+      AdjustTask.Repo,
       AdjustTask.Worker
     ]
 

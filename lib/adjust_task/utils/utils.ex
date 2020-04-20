@@ -3,10 +3,6 @@ defmodule AdjustTask.Utils do
     This module contains various utilities methods
     """    
     @seconds_in_one_day 86400
-
-    def next_day(%DateTime{} = date) do
-        DateTime.add(date, @seconds_in_one_day, :second)
-    end
     
     def day_start(%DateTime{} = dt) do
         %DateTime{year: dt.year, month: dt.month, day: dt.day, zone_abbr: dt.zone_abbr,
@@ -21,6 +17,10 @@ defmodule AdjustTask.Utils do
     end
     def previous_date(_), do: :error
 
+    def next_day(%DateTime{} = date) do
+        DateTime.add(date, @seconds_in_one_day, :second)
+    end
+    
     def next_date(%Date{} = date) do
         Date.add(date, 1)
     end
