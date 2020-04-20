@@ -21,6 +21,7 @@ defmodule AdjustTask.Worker do
     alias AdjustTask.Utils
     alias AdjustTask.Worker.State
     alias AdjustTask.Postgres.PostgresUtils
+    alias AdjustTask.Scylla.Intensities
     
     require Logger
 
@@ -100,12 +101,13 @@ defmodule AdjustTask.Worker do
 
         case HTTPoison.get(url) do
             {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
-                _intensities =
+                intensities =
                     body
                     |> Poison.decode!
                 
-                #TODO:- Save intensities to timeseries database
+                Intensities.save(date, intensities["data"])
                 Logger.info(fn -> "Successfully fetched data for date: #{inspect date}" end)
+                
                 {:ok, :done}
 
             {:ok, %HTTPoison.Response{status_code: 404}} ->

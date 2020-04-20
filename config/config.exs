@@ -14,6 +14,19 @@ config :adjust_task, AdjustTask.Repo,
     hostname: pg_configs[:hostname],
     pool_size: pg_configs[:pool_size]
 
+scylla_configs = Keyword.fetch!(configs, :scylla_configs)
+scylla_auth = [username: Keyword.fetch!(scylla_configs, :username),
+                password: Keyword.fetch!(scylla_configs, :password)]
+
+config :xandra, Xandra,
+    name: CassandraCluster,
+    pool: Xandra.Cluster,
+    autodiscovery: false,
+    authentication: {Xandra.Authenticator.Password, scylla_auth},
+    pool_size: scylla_configs[:pool_size],
+    nodes: scylla_configs[:nodes],
+    keyspace: scylla_configs[:keyspace]
+
 config :adjust_task,
   api_url: "https://api.carbonintensity.org.uk/intensity/date/",
   start_date: "2020-04-11",

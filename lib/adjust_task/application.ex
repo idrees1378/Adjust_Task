@@ -8,9 +8,19 @@ defmodule AdjustTask.Application do
   
   def start(_type, _args) do
     Logger.info(fn -> "Application started." end)
+    
+    xandra_configs = Application.get_env(:xandra, Xandra)
+    keyspace = xandra_configs[:keyspace]
+    
+    xandra_configs =
+      [  after_connect: fn(conn) ->
+         {:ok, _} = Xandra.execute(conn, "USE " <> keyspace)
+      end] ++ xandra_configs
+
     children = [
       AdjustTask.Repo,
-      AdjustTask.Worker
+      {Xandra.Cluster, xandra_configs},
+      {AdjustTask.Worker, nil}
     ]
 
     opts = [strategy: :one_for_one, name: AdjustTask.Supervisor]
