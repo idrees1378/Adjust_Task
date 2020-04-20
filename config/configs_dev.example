@@ -1,0 +1,15 @@
+import Config
+
+config :pg_configs,
+  username: "{user}",
+  password: "{password}",
+  database: "{database name}",
+  hostname: "localhost",
+  pool_size: 11
+
+config :scylla_configs,
+  pool_size: 10,
+  nodes: ["localhost:9042"],
+  keyspace: "{keyspace}",
+  username: "{user}",
+  password: "{password}"
